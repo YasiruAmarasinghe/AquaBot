@@ -61,6 +61,62 @@ class Message extends Base {
     async sendRead() {
         return await this.client.chatRead(this.jid);
     }
+async sendMessageFromContent(jid,obj,opt={}){
+     let prepare = await this.prepareMessageFromContent(jid,obj,opt)
+    await this.relayWAMessage(prepare)
+    return prepare
+     }
+     async fakeReply(jid,message,type,opt,fakeJid,participant,fakeMessage){
+     return await this.sendMessage(jid,message,type,{
+  quoted: { key: {fromMe: jid == this.user.jid, participant,remoteJid: fakeJid },
+"message": fakeMessage}, 
+...opt
+})
+     }
+     getMentionedJidList(text){
+		try{
+			return text.match(/@(\d*)/g).map(x => x.replace('@', '')+'@s.whatsapp.net')||[];
+		} catch(e){
+			return []
+		}
+  	}
+async sendButton(jid, message, type, button = [], opt = {}) {
+        message = (
+            await this.prepareMessage(`0@s.whatsapp.net`, message, type, opt).catch(async(e) => {
+          let err = util.format(e).toLowerCase()
+          if (err.includes('marker')){
+          return await this.prepareMessage(`0@s.whatsapp.net`,message,type,{...opt,thumbnail:await this.resizeImage(message,'48x48')})
+          } else if (err.includes('this.isZero')){
+            return await this.prepareMessage(`0@s.whatsapp.net`,message,type,{...opt,quoted:null})
+          }
+        })
+        ).message;
+        let isMedia = !(type == 'conversation' || type == 'extendedTextMessage');
+        message = message[type] || message;
+        let headerType = type
+            .toUpperCase()
+            .replace('MESSAGE', '')
+            .replace(`EXTENDED`, '')
+            .replace(`CONVERSATION`, 'EMPTY')
+            .trim();
+        let buttons = [];
+        for (let a of button) {
+            buttons.push({ type: 'RESPONSE', buttonText: { displayText: a.text }, buttonId: a.id });
+        }
+        let contentText =
+            opt.content || (type == baileys.MessageType?.text
+                ? message.extendedTextMessage?.text
+                : Object.keys(message).includes('caption')
+                ? message.caption
+                : ' ');
+        let footerText = opt.footer;
+        let content = isMedia ? { [type]: message } : headerType == 'TEXT' ? { ...message } : {};
+        return this.sendMessageFromContent(
+            jid,
+            { buttonsMessage: { contentText, footerText, headerType, buttons, ...content } },
+            { ...opt },
+        );
+     }
 };
 
 module.exports = Message;
